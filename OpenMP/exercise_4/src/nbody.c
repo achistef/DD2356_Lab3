@@ -7,6 +7,18 @@ void nbody(struct Body *bodies, int steps, int output_steps, int N, double G, do
 
 	double t1, t2;
 
+	int thread_count = omp_get_max_threads();
+
+	double *tfx = (double*) malloc(thread_count * sizeof(double));
+	double *tfy = (double*) malloc(thread_count * sizeof(double));
+	double *tfz = (double*) malloc(thread_count * sizeof(double));
+
+	for(int i = 0; i < thread_count; i ++) {
+		tfx[i] = 0.0;
+		tfy[i] = 0.0;
+		tfz[i] = 0.0;
+	}
+
 	for (int i = 0; i < steps; i++) {
 		if (output_steps != 0 && (i + output_steps) % output_steps == 0) {
 			snprintf(buffer, 1024, "%d.txt", i);
@@ -15,23 +27,20 @@ void nbody(struct Body *bodies, int steps, int output_steps, int N, double G, do
 
 		t1 = omp_get_wtime();
 
+		#pragma omp parallel for
 		for (int j = 0; j < N; j++) {
 			double fx = 0.0;
 			double fy = 0.0;
 			double fz = 0.0;
-
-			double dx;
-			double dy;
-			double dz;
-
-			double f;
-			double r;
-
-			double ax;
-			double ay;
-			double az;
+			int id = omp_get_thread_num();
 
 			for (int k = 0; k < N; k++) {
+				double dx;
+				double dy;
+				double dz;
+				double f;
+				double r;
+
 				if (j != k) {
 					dx = bodies[j].position[0] - bodies[k].old_position[0];
 					dy = bodies[j].position[1] - bodies[k].old_position[1];
@@ -39,11 +48,23 @@ void nbody(struct Body *bodies, int steps, int output_steps, int N, double G, do
 					r = sqrt(dx * dx + dy * dy + dz * dz);
 					f = -G * (bodies[j].mass * bodies[k].mass) / pow((r * r) + (EPS * EPS), 1.5);
 
-					fx += f * dx / r;
-					fy += f * dy / r;
-					fz += f * dz / r;
+					// avoid race conditions on fx, fy, fz
+					tfx[id] += f * dx / r;
+					tfy[id] += f * dy / r;
+					tfz[id] += f * dz / r;
 				}
 			}
+
+			fx += tfx[id];
+			fy += tfy[id];
+			fz += tfz[id];
+			tfx[id] = 0.0;
+			tfy[id] = 0.0;
+			tfz[id] = 0.0;
+			
+			double ax;
+			double ay;
+			double az;
 
 			ax = fx / bodies[j].mass;
 			ay = fy / bodies[j].mass;
@@ -59,11 +80,11 @@ void nbody(struct Body *bodies, int steps, int output_steps, int N, double G, do
 		}
 
 
+		# pragma omp parallel for
 		for (int j = 0; j < N; j++) {
 			bodies[j].old_position[0] = bodies[j].position[0];
 			bodies[j].old_position[1] = bodies[j].position[1];
 			bodies[j].old_position[2] = bodies[j].position[2];
-
 			if (checkpoint != NULL)
 				fprintf(checkpoint, "%d\t%f\t%f\t%f\n\n\n", j, bodies[j].position[0], bodies[j].position[1], bodies[j].position[2]);
 		}
@@ -75,6 +96,9 @@ void nbody(struct Body *bodies, int steps, int output_steps, int N, double G, do
 			checkpoint = NULL;
 		}
 
-		printf("step = %d, runtime: %f\n", i, t2 - t1);
+		// printf("step = %d, runtime: %f\n", i, t2 - t1);
 	}
+	free(tfx);
+	free(tfy);
+	free(tfz);
 }
