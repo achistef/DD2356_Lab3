@@ -7,18 +7,6 @@ void nbody(struct Body *bodies, int steps, int output_steps, int N, double G, do
 
 	double t1, t2;
 
-	int thread_count = omp_get_max_threads();
-
-	double *tfx = (double*) malloc(thread_count * sizeof(double));
-	double *tfy = (double*) malloc(thread_count * sizeof(double));
-	double *tfz = (double*) malloc(thread_count * sizeof(double));
-
-	for(int i = 0; i < thread_count; i ++) {
-		tfx[i] = 0.0;
-		tfy[i] = 0.0;
-		tfz[i] = 0.0;
-	}
-
 	for (int i = 0; i < steps; i++) {
 		if (output_steps != 0 && (i + output_steps) % output_steps == 0) {
 			snprintf(buffer, 1024, "%d.txt", i);
@@ -32,7 +20,6 @@ void nbody(struct Body *bodies, int steps, int output_steps, int N, double G, do
 			double fx = 0.0;
 			double fy = 0.0;
 			double fz = 0.0;
-			int id = omp_get_thread_num();
 
 			for (int k = 0; k < N; k++) {
 				double dx;
@@ -48,19 +35,14 @@ void nbody(struct Body *bodies, int steps, int output_steps, int N, double G, do
 					r = sqrt(dx * dx + dy * dy + dz * dz);
 					f = -G * (bodies[j].mass * bodies[k].mass) / pow((r * r) + (EPS * EPS), 1.5);
 
-					// avoid race conditions on fx, fy, fz
-					tfx[id] += f * dx / r;
-					tfy[id] += f * dy / r;
-					tfz[id] += f * dz / r;
+					#pragma omp atomic
+					fx += f * dx / r;
+					#pragma omp atomic
+					fy += f * dy / r;
+					#pragma omp atomic
+					fz += f * dz / r;
 				}
 			}
-
-			fx += tfx[id];
-			fy += tfy[id];
-			fz += tfz[id];
-			tfx[id] = 0.0;
-			tfy[id] = 0.0;
-			tfz[id] = 0.0;
 			
 			double ax;
 			double ay;
@@ -98,7 +80,4 @@ void nbody(struct Body *bodies, int steps, int output_steps, int N, double G, do
 
 		// printf("step = %d, runtime: %f\n", i, t2 - t1);
 	}
-	free(tfx);
-	free(tfy);
-	free(tfz);
 }
