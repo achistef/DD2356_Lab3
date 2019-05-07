@@ -37,7 +37,8 @@ void compute_pi(int flip, int *local_count, double *answer)
     srand(seed * rank); // Important: Multiply SEED by "rank" when you introduce MPI!
 
     // Calculate PI following a Monte Carlo method
-    for (int iter = 0; iter < flip / num_ranks; iter++)
+    int iter;
+    for (iter = 0; iter < flip / num_ranks; iter++)
     {
         // Generate random (X,Y) points
         x = (double)random() / (double)RAND_MAX;

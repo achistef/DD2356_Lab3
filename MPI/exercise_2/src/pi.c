@@ -37,7 +37,8 @@ void compute_pi(int flip, int *local_count, double *answer)
     srand(seed * rank); // Important: Multiply SEED by "rank" when you introduce MPI!
 
     // Calculate PI following a Monte Carlo method
-    for (int iter = 0; iter < flip / num_ranks; iter++)
+    int iter;
+    for (iter = 0; iter < flip / num_ranks; iter++)
     {
         // Generate random (X,Y) points
         x = (double)random() / (double)RAND_MAX;
@@ -54,14 +55,16 @@ void compute_pi(int flip, int *local_count, double *answer)
     if (rank == 0){
     	long local_counts[num_ranks];
     	MPI_Request requests[num_ranks];
-
-		for (int src = 1; src < num_ranks; src++) 
+		
+		int src;
+		for (src = 1; src < num_ranks; src++) 
 			MPI_Irecv(&local_counts[src - 1], 1, MPI_INT, src, 0, MPI_COMM_WORLD, &requests[src - 1]);
 		
 		MPI_Waitall(num_ranks - 1, requests, MPI_STATUS_IGNORE);
 
 		int total_count = *local_count;
-		for (int i = 1; i < num_ranks; i ++) 
+		int i;
+		for (i = 1; i < num_ranks; i ++) 
 			total_count += local_counts[i - 1];
 
 		// Estimate Pi and display the result

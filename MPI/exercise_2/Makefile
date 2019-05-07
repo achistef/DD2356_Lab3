@@ -1,4 +1,4 @@
-CC = mpicc
+CC = cc
 SRC = $(wildcard src/*.c)
 OBJ = $(SRC:.c=.o)
 BIN = ./bin
@@ -18,7 +18,7 @@ ${BIN}:
 	$(CC) $(CFLAGS) -c -o $@ $< 
 
 $(BIN)/$(TARGET): $(OBJ)
-	$(CC) $(LDFLAGS) -o $@ $^ -lm
+	$(CC) $(LDFLAGS) -o $@ $^
 
 .PHONY: clean
 clean:
