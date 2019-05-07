@@ -55,20 +55,18 @@ void compute_pi(int flip, int *local_count, double *answer)
     	long local_counts[num_ranks];
     	MPI_Request requests[num_ranks];
 
-	for (int src = 1; src < num_ranks; src++) 
-		MPI_Irecv(&local_counts[src - 1], 1, MPI_INT, src, 0, MPI_COMM_WORLD, &requests[src - 1]);
+		for (int src = 1; src < num_ranks; src++) 
+			MPI_Irecv(&local_counts[src - 1], 1, MPI_INT, src, 0, MPI_COMM_WORLD, &requests[src - 1]);
 		
-	MPI_Waitall(num_ranks - 1, requests, MPI_STATUS_IGNORE);
+		MPI_Waitall(num_ranks - 1, requests, MPI_STATUS_IGNORE);
 
-	int total_count = *local_count;
-	for (int i = 1; i < num_ranks; i ++) 
-		total_count += local_counts[i - 1];
+		int total_count = *local_count;
+		for (int i = 1; i < num_ranks; i ++) 
+			total_count += local_counts[i - 1];
 
-	// Estimate Pi and display the result
-	*answer = ((double)total_count / (double)flip) * 4.0;
+		// Estimate Pi and display the result
+		*answer = ((double)total_count / (double)flip) * 4.0;
 	}
-	else {
-		MPI_Request request;
-		MPI_Isend(local_count, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
-	}
+	else
+		MPI_Send(local_count, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
 }

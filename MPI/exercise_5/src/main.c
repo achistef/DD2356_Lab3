@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 
 	init_pi(seed, filename);
 	compute_pi(flip, &count, &pi);
-	printf("rank %d: %d / %d = %f\n", world_rank, count, flip, (double)count / (double)flip);
+	//printf("rank %d: %d / %d = %f\n", world_rank, count, flip, (double)count / (double)flip);
 	if (world_rank == 0) {
 		printf("pi: %f\n", pi);
 	}
