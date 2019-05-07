@@ -4,6 +4,7 @@
 
 void write_in_file();
 int size_of_array();
+void add_new_value();
 
 void init_pi(int set_seed, char *outfile)
 {
@@ -62,34 +63,64 @@ void compute_pi(int flip, int *local_count, double *answer)
 
 		MPI_Send(&token, 1, MPI_INT, next_rank, 1, MPI_COMM_WORLD);
 		MPI_Recv(&token, 1, MPI_INT, prev_rank, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		write_in_file(rank, (*local_count) / (flip / num_ranks));
+		write_in_file(rank, (double)(*local_count) / ((double)flip / (double)num_ranks));
 
     }else{
 	
         MPI_Recv(&token, 1, MPI_INT, prev_rank, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        write_in_file(rank, (*local_count) / (flip / num_ranks));
+        write_in_file(rank, (double)(*local_count) / ((double)flip / (double)num_ranks));
 		token = token + 1;
 		MPI_Send(&token, 1, MPI_INT, next_rank, 1, MPI_COMM_WORLD);
     }
 
-    if (rank == 0){
+    if (rank == 0){   	
     	// rank 0 is the last process that accesses the file. 
     	// We are sure that all other processes have finished writing.
 		MPI_File fh;
-		int t_rank;
-		double t_value;
-		char dummy_buffer;
+		MPI_Status status;
+		
 		MPI_File_open(MPI_COMM_SELF, filename, MPI_MODE_RDWR, MPI_INFO_NULL, &fh);
 
-		MPI_File_read(fh, &t_rank, 1, MPI_CHAR, MPI_STATUS_IGNORE);
+		char ch;
+		char buffer[100];
+		buffer[0] = '\0';
+		double total_count = 0;
 
-		printf("%d\n", t_rank);
+		while(1) {
 
+			MPI_File_read(fh, &ch, 1, MPI_CHAR, &status);
 
-		//MPI_File_write(fh, result, size_of_array(result), MPI_CHAR, MPI_STATUS_IGNORE);
+			int count = 0;
+			MPI_Get_count(&status, MPI_CHAR, &count);
+			if(count < 1) 
+				break;		//EOF
+			else 
+				if(ch != '\n')
+					strcat(buffer, &ch);
+				else {
+					add_new_value(buffer, &total_count, num_ranks);
+					buffer[0] = '\0';
+				}
+		}
+	
+		*answer = (double)total_count * 4.0;
+
+		char pi[100];
+		sprintf (pi, "pi = %f\n", *answer);
+		MPI_File_write(fh, pi, size_of_array(pi), MPI_CHAR, MPI_STATUS_IGNORE);
+		
 		MPI_File_close(&fh);
-		*answer = 0;//((double)total_count / (double)flip) * 4.0;
 	}
+}
+
+void add_new_value(char *buffer, double *total_count, int num_ranks) {
+	char *value_token;
+	double value;
+	char sep[2] = " ";
+	strtok(buffer, sep);
+	value_token = strtok(NULL, sep);
+	value = atof(value_token);
+	*total_count += value / (double)num_ranks;
 }
 
 void write_in_file(int rank, double value){
@@ -104,5 +135,5 @@ void write_in_file(int rank, double value){
 int size_of_array(char* pointer){
 	int i = 0;
 	while(pointer[i] != '\0') i++;
-	return i * sizeof(char);
+	return i;
 }
