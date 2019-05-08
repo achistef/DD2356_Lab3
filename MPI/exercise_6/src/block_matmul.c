@@ -34,6 +34,7 @@ struct Config {
 
 struct Config config;
 
+
 void init_matmul(char *A_file, char *B_file, char *outfile)
 {
 
@@ -60,7 +61,7 @@ void init_matmul(char *A_file, char *B_file, char *outfile)
 	/* Broadcast global matrix sizes */
 	MPI_Bcast(config.A_dims, 2, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(config.B_dims, 2, MPI_INT, 0, MPI_COMM_WORLD);
-
+	
 
 	/* Set dim of tiles relative to the number of processes as NxN where N=sqrt(world_size) */
 	config.dim[0] = config.dim[1] = sqrt(config.world_size);
@@ -123,15 +124,36 @@ void init_matmul(char *A_file, char *B_file, char *outfile)
 
 
 	/* Create subarray datatype for local matrix tile */
-	
+	int start_from[2] = {config.row_rank * config.local_dims[0], config.col_rank * config.local_dims[1]};
+	//printf("Rank %d is responsible for %d %d\n",config.world_rank, start_from[0], start_from[1]);
+	MPI_Type_create_subarray(2, config.A_dims, config.local_dims, start_from, MPI_ORDER_C, MPI_DOUBLE, &config.block);
+	MPI_Type_commit(&config.block);
+
 
 	/* Create data array to load actual block matrix data */
+	config.A = malloc(config.local_size*sizeof(double));
+	config.A_tmp = malloc(config.local_size*sizeof(double));
+	config.B = malloc(config.local_size*sizeof(double));
+	config.C = malloc(config.local_size*sizeof(double));
 
 	/* Set fileview of process to respective matrix block */
+	MPI_File_open(MPI_COMM_WORLD, A_file, MPI_MODE_RDONLY, MPI_INFO_NULL, &config.A_file);
+	MPI_File_open(MPI_COMM_WORLD, B_file, MPI_MODE_RDONLY, MPI_INFO_NULL, &config.B_file);
+
+	MPI_File_set_view(config.A_file, 2*sizeof(int), MPI_DOUBLE, config.block, "native", MPI_INFO_NULL);
+	MPI_File_set_view(config.B_file, 2*sizeof(int), MPI_DOUBLE, config.block, "native", MPI_INFO_NULL);
 
 	/* Collective read blocks from files */
+	MPI_File_read_all(config.A_file, config.A, config.local_size, MPI_DOUBLE, MPI_STATUS_IGNORE);
+	MPI_File_read_all(config.B_file, config.B, config.local_size, MPI_DOUBLE, MPI_STATUS_IGNORE);
 
 	/* Close data source files */
+	MPI_File_close(&config.A_file);
+	MPI_File_close(&config.B_file);
+
+	//PRINT
+	printf("Rank %d read: %f %f %f %f...\n", config.world_rank, config.A[0], config.A[1], config.A[2], config.A[3]);
+	
 }
 
 void cleanup_matmul()
