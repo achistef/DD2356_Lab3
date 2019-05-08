@@ -40,7 +40,8 @@ void compute_pi(int flip, int *local_count, double *answer)
     srand(seed * rank); // Important: Multiply SEED by "rank" when you introduce MPI!
 
     // Calculate PI following a Monte Carlo method
-    for (int iter = 0; iter < flip / num_ranks; iter++)
+    int iter;
+    for (iter = 0; iter < flip / num_ranks; iter++)
     {
         // Generate random (X,Y) points
         x = (double)random() / (double)RAND_MAX;
@@ -114,12 +115,9 @@ void compute_pi(int flip, int *local_count, double *answer)
 }
 
 void add_new_value(char *buffer, double *total_count, int num_ranks) {
-	char *value_token;
-	double value;
-	char sep[2] = " ";
-	strtok(buffer, sep);
-	value_token = strtok(NULL, sep);
-	value = atof(value_token);
+	char *dummy = strtok(buffer, " ");
+	char *value_token = strtok(NULL, " ");
+	double value = atof(value_token);
 	*total_count += value / (double)num_ranks;
 }
 
