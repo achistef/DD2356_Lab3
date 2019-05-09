@@ -90,10 +90,7 @@ void init_matmul(char *A_file, char *B_file, char *outfile)
 	MPI_Cart_create(MPI_COMM_WORLD, 2, config.dim, period , 1, &config.grid_comm);
 
 	MPI_Cart_coords(config.grid_comm, config.world_rank, 2, config.coords);
-        //printf("Rank %d coordinates are %d %d\n", config.world_rank, config.coords[0], config.coords[1]);
-
 	MPI_Cart_rank(config.grid_comm, config.coords, &config.grid_rank);
-        //printf("The processor at position (%d, %d) has rank %d\n", config.coords[0], config.coords[1], config.grid_rank);
 	
 
 	/* Sub div cart communicator to N row communicator */
@@ -101,7 +98,6 @@ void init_matmul(char *A_file, char *B_file, char *outfile)
 	MPI_Cart_sub(config.grid_comm, selected_dim, &config.row_comm);
 	MPI_Comm_rank(config.row_comm, &config.row_rank);
 	MPI_Comm_size(config.row_comm, &config.row_size);
-	printf("Rank %d: Row comm rank %d, world size %d\n", config.world_rank, config.row_rank, config.row_size);
 
 
 	/* Sub div cart communicator to N col communicator */
@@ -110,7 +106,6 @@ void init_matmul(char *A_file, char *B_file, char *outfile)
         MPI_Cart_sub(config.grid_comm, selected_dim, &config.col_comm);
 	MPI_Comm_rank(config.col_comm, &config.col_rank);
         MPI_Comm_size(config.col_comm, &config.col_size);
-	printf("Rank %d: Col comm rank %d, world size %d\n", config.world_rank, config.col_rank, config.col_size);
 	
 
 	/* Setup sizes of full matrices */
@@ -124,8 +119,7 @@ void init_matmul(char *A_file, char *B_file, char *outfile)
 
 
 	/* Create subarray datatype for local matrix tile */
-	int start_from[2] = {config.row_rank * config.local_dims[0], config.col_rank * config.local_dims[1]};
-	//printf("Rank %d is responsible for %d %d\n",config.world_rank, start_from[0], start_from[1]);
+	int start_from[2] = {config.col_rank * config.local_dims[0], config.row_rank * config.local_dims[1]};
 	MPI_Type_create_subarray(2, config.A_dims, config.local_dims, start_from, MPI_ORDER_C, MPI_DOUBLE, &config.block);
 	MPI_Type_commit(&config.block);
 
@@ -151,10 +145,6 @@ void init_matmul(char *A_file, char *B_file, char *outfile)
 	/* Close data source files */
 	MPI_File_close(&config.A_file);
 	MPI_File_close(&config.B_file);
-
-	// print first four numbers of each process
-	//printf("Rank %d read A : %f %f %f %f...\n", config.world_rank, config.A[0], config.A[1], config.A[2], config.A[3]);
-	//printf("Rank %d read B : %f %f %f %f...\n", config.world_rank, config.B[0], config.B[1], config.B[2], config.B[3]);	
 }
 
 void cleanup_matmul()
@@ -176,6 +166,11 @@ void cleanup_matmul()
 	MPI_File_close(&config.C_file);
 
 	/* Cleanup */
+	free(config.A);
+	free(config.A_tmp);
+	free(config.B);
+	free(config.B_tmp);
+	free(config.C);
 }
 
 void multiply_matrices()
@@ -200,7 +195,6 @@ void array_copy(double *a, double*b, int count){
 
 void compute_fox()
 {
-	//printf("Rank %d B: %f %f %f %f...\n", config.world_rank, config.B[0], config.B[1], config.B[2], config.B[3]);
 
 	/* Compute source and target for verticle shift of B blocks */
 	int above = config.col_rank -1;
@@ -212,26 +206,18 @@ void compute_fox()
 		
 		// calculate which col rank will bcast
 		int bcast_col = (config.col_rank + r) % config.dim[0];
-
 		if(bcast_col == config.row_rank){
 			array_copy(config.A_tmp, config.A, config.local_size);
-			//if (config.world_rank == 0) 
-			//	printf("Rank %d A tmp before bcast: %f %f %f %f...\n", config.world_rank, config.A_tmp[0], config.A_tmp[1], config.A_tmp[2], config.A_tmp[3]);
-			//printf("Round %d Rank %d will bcast!\n", r, config.world_rank);
 		}
 		
 		/* Diag + i broadcast block A horizontally and use A_tmp to preserve own local A */
 		MPI_Bcast(config.A_tmp,  config.local_size,  MPI_DOUBLE,  bcast_col,  config.row_comm);
-		//if (config.world_rank == 0)
-			//printf("Rank %d A tmp after bcast : %f %f %f %f...\n", config.world_rank, config.A_tmp[0], config.A_tmp[1], config.A_tmp[2], config.A_tmp[3]);
+
 
 		/* dgemm with blocks */
 		multiply_matrices();
-		//if (config.world_rank == 0)
-		//printf("Rank %d output: %f %f %f %f...\n", config.world_rank, config.C[0], config.C[1], config.C[2], config.C[3]);	
-		//if (config.world_rank == 0)
-                //        printf("Rank %d C mult : %f %f %f %f...\n", config.world_rank, config.C[0], config.C[1], config.C[2], config.C[3]);	
-		
+
+
 		/* Shfting block B upwards and receive from process below */
 		array_copy(config.B_tmp, config.B, config.local_size);
 		MPI_Request request;
@@ -239,13 +225,7 @@ void compute_fox()
 		MPI_Isend(config.B_tmp, config.local_size, MPI_DOUBLE, above, r+1, config.col_comm, &request);
 		MPI_Recv(config.B, config.local_size, MPI_DOUBLE, below, r+1, config.col_comm, MPI_STATUS_IGNORE);
 		MPI_Wait(&request, &status);
-		////printf("Rank %d output: %f %f %f %f...\n", config.world_rank, config.C[0], config.C[1], config.C[2], config.C[3]);
-		//printf("Rank %d B: %f %f %f %f...\n", config.world_rank, config.B[0], config.B[1], config.B[2], config.B[3]);
-		//MPI_Barrier(MPI_COMM_WORLD);
-		///printf("End\n");
-		//MPI_Barrier(MPI_COMM_WORLD);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
-	printf("Rank %d C: %f %f %f %f...\n", config.world_rank, config.C[0], config.C[1], config.C[2], config.C[3]);
-
+	
 }
