@@ -195,7 +195,10 @@ void array_copy(double *a, double*b, int count){
 
 void compute_fox()
 {
-
+	
+	int i;
+	for(i = 0; i < config.local_size; i++) config.C[i] = 0;
+	
 	/* Compute source and target for verticle shift of B blocks */
 	int above = config.col_rank -1;
 	if(above <0) above +=config.dim[0];
@@ -226,6 +229,5 @@ void compute_fox()
 		MPI_Recv(config.B, config.local_size, MPI_DOUBLE, below, r+1, config.col_comm, MPI_STATUS_IGNORE);
 		MPI_Wait(&request, &status);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
 	
 }
